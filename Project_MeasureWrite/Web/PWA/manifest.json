@@ -1,0 +1,23 @@
+{
+    "name": "Milk Tank Level Visualization",
+    "short_name": "Milk Tank",
+    "description": "Visualize and monitor milk tank levels with dynamic charts.",
+    "icons": [
+      {
+        "src": "icon-192x192.png",
+        "type": "image/png",
+        "sizes": "192x192"
+      },
+      {
+        "src": "icon-512x512.png",
+        "type": "image/png",
+        "sizes": "512x512"
+      }
+    ],
+    "start_url": "/index.html",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#0d6efd",
+    "orientation": "portrait"
+  }
+  
