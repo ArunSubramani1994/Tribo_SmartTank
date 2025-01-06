@@ -1,50 +1,25 @@
 
+#include <Cfg.h>
+
 #include "esp_log.h"
 #include <SensorModbusMaster.h>
 #include <HardwareSerial.h>
 
-#define eNoError    0U
-#define eError      1U
-
 #define TAG "INIT"
 
-#define ENABLE_DEBUG 1
+/************************* Globals - End **********************************/
 
-#if ENABLE_DEBUG
-  #define DEBUG_PRINT(x) Serial.print(x)
-  #define DEBUG_PRINTLN(x) Serial.println(x)
-#else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTLN(x)
-#endif
+#include <WiFi.h>
+#include <WiFiMulti.h>
 
-#define TOTAL_SLAVES 3
+WiFiMulti WiFiMulti;
 
-#define eSl_BCast        0U
-#define eSl_Hmi          1U
-#define eSl_LvlSen       2U
-
-#define eSl_Id_BCast     0U
-#define eSl_Id_Hmi       1U
-#define eSl_Id_LvlSen    2U
-
-byte SlaveIDs[TOTAL_SLAVES] = {eSl_Id_BCast, eSl_Id_Hmi, eSl_Id_LvlSen};
-
-#define HR_SIZE_MAX 30
-#define IR_SIZE_MAX 20
-
-long modbusBaudRate = 19200; 
-const int DEREPin = 4;
-
-/* Define UART pins - Waveshare 6 CH Relay */
-#define RS485_TXD_PIN 17 // GPIO17 for TXD
-#define RS485_RXD_PIN 18 // GPIO18 for RXD
+uint16_t Wifi_TryCount = 0;
 
 /* Use HardwareSerial for Modbus RS485 communication */
 HardwareSerial* modbusSerial = &Serial2;
 
 /* Construct the modbus instances */
-
 modbusMaster modbusInstances[TOTAL_SLAVES];
 
 uint16_t HoldReg_Slxx[TOTAL_SLAVES][HR_SIZE_MAX];
@@ -60,98 +35,136 @@ uint32_t TS_GRP_02 = 0;
 uint32_t TS_GRP_03 = 0;
 uint32_t TS_GRP_04 = 0;
 
+
+/* ****************** ThingSpeak Diagnostics - Begin ********************************/
+
+#ifdef THINGSPEAK_DIAGNOSTICS_ENABLED
+
+unsigned long myChannelNumber_CH01 = SECRET_CH_ID_CH01;
+const char * myWriteAPIKey_CH01 = SECRET_WRITE_APIKEY_CH01;
+
+unsigned long myChannelNumber_CH02 = SECRET_CH_ID_CH02;
+const char * myWriteAPIKey_CH02 = SECRET_WRITE_APIKEY_CH02;
+
+unsigned long myChannelNumber_CH03 = SECRET_CH_ID_CH03;
+const char * myWriteAPIKey_CH03 = SECRET_WRITE_APIKEY_CH03;
+
+unsigned long myChannelNumber_CH04 = SECRET_CH_ID_CH04;
+const char * myWriteAPIKey_CH04 = SECRET_WRITE_APIKEY_CH04;
+
+WiFiClient TS_client;
+
+/* ThingSpeak Init - Begin */
+void ThingSpeak_Init(void)
+{
+  ThingSpeak.begin(TS_client);
+}
+/* ThingSpeak Init - End */
+
+
+/* ThingSpeak Update - Begin */
+
+unsigned long ThingSpeak_lastSendTime = 0;
+
+float CH01_Values[8] = {0};
+float CH02_Values[8] = {0};
+float CH03_Values[8] = {0};
+float CH04_Values[8] = {0};
+
+String CH01_Status = "NA";
+String CH02_Status = "NA";
+String CH03_Status = "NA";
+String CH04_Status = "NA";
+
+Std_RetType ThingSpeak_Update_CH01()
+{
+  return (ThingSpeak_Update_CHXX(myChannelNumber_CH01, myWriteAPIKey_CH01, CH01_Values, CH01_Status));
+}
+
+Std_RetType ThingSpeak_Update_CH02()
+{
+  return (ThingSpeak_Update_CHXX(myChannelNumber_CH02, myWriteAPIKey_CH02, CH02_Values, CH02_Status));
+}
+
+Std_RetType ThingSpeak_Update_CH03()
+{
+  return (ThingSpeak_Update_CHXX(myChannelNumber_CH03, myWriteAPIKey_CH03, CH03_Values, CH03_Status));
+}
+
+Std_RetType ThingSpeak_Update_CH04()
+{
+  return (ThingSpeak_Update_CHXX(myChannelNumber_CH04, myWriteAPIKey_CH04, CH04_Values, CH04_Status));
+}
+
+Std_RetType ThingSpeak_Update_CHXX(int CHXX_No, const char * CHXX_WriteAPIKey, float * CHXX_Values, String CHXX_Status)
+{
+
+  Std_RetType Ret = E_NOT_OK;
+
+  for (int i = 0; i < 8; i++)
+  {
+    ThingSpeak.setField(i + 1, CHXX_Values[i]);
+  }
+
+  ThingSpeak.setStatus(CHXX_Status);
+
+  int x = ThingSpeak.writeFields(CHXX_No, CHXX_WriteAPIKey);
+
+  if (x == 200)
+  {
+    DEBUG_PRINTLN("[TS]: CH-" + String(CHXX_No) + " Update Success !");
+    Ret = E_OK;
+  }
+  else
+  {
+    DEBUG_PRINTLN("[TS]: CH-" + String(CHXX_No) + " Update Failed ! - EC: " + String(x));
+  }
+
+  return Ret;
+}
+
+#endif
+
+/* ****************** ThingSpeak Diagnostics - End ********************************/
+
 void setup()
 {
-  pinMode(DEREPin, OUTPUT);
-
-  modbusSerial->begin(modbusBaudRate, SERIAL_8N2, RS485_RXD_PIN, RS485_TXD_PIN);
+  pinMode(RS485_DERE_PIN, OUTPUT);
+  modbusSerial->begin(RS485_BAUD, RS485_STOP_BITS, RS485_RXD_PIN, RS485_TXD_PIN);
 
   #if ENABLE_DEBUG
-  Serial.begin(9600);
+  Dbug_Serial.begin(9600);
   #endif
+
+  WiFi_Init();
 
   /* Start the modbus instances */
   for (int i = 0; i < TOTAL_SLAVES; ++i)
   {
-    modbusInstances[i].begin(SlaveIDs[i], modbusSerial, DEREPin);
+    modbusInstances[i].begin(SlaveIDs[i], modbusSerial, RS485_DERE_PIN);
   }
 
   DEBUG_PRINT("Initializing the system!");
 
+  #ifdef THINGSPEAK_DIAGNOSTICS_ENABLED
+  ThingSpeak_Init();
+  #endif
+
 }
-
-typedef enum
-{
-  eModAdd_Coil_FC                 = 0x01,
-  eModAdd_IR_FC                   = 0x04,
-  eModAdd_HR_FC                   = 0x03,
-
-  eModAdd_Coil_Start              = 0,
-  eModAdd_Coil_Condensor          = 0,
-  eModAdd_Coil_Stirrer            = 1,
-  eModAdd_Coil_Alarm_Off          = 2,
-  eModAdd_Coil_Alarm_Reset        = 3,
-  eModAdd_Coil_MaxQty             = 4,
-
-  eModAdd_IR_Start                = 100,
-  eModAdd_IR_Sensor_1_CurrTemp    = 100,
-  eModAdd_IR_Sensor_2_CurrTemp    = 102,
-  eModAdd_IR_Curr_OnTime          = 104,
-  eModAdd_IR_Curr_OffTime         = 106,
-  eModAdd_IR_Ref_Temp             = 108,
-  eModAdd_IR_MaxQty               = 10,
-
-  eModAdd_HR_Start                = 210,
-  eModAdd_HR_Set_Temp             = 210,
-  eModAdd_HR_Hys_Temp             = 212,
-  eModAdd_HR_Alarm_Hys_Temp       = 214,
-  eModAdd_HR_Stirrer_OnTime       = 216,
-  eModAdd_HR_Stirrer_OffTime      = 218,
-  eModAdd_HR_Comp_Alarm_Time      = 220,
-
-  eModAdd_HR_Alarm_Value          = 224,
-  eModAdd_HR_Condensor_RunSts     = 230,
-  eModAdd_HR_Stirrer_RunSts       = 231,
-  eModAdd_HR_Alarm_OnOff_Sts      = 232,
-
-  eModAdd_HR_MaxQty               = 23,
-
-  eModAdd_LvlSen_IR_Start         = 100,
-  eModAdd_LvlSen_IR_TankLvl       = 100,
-  eModAdd_LvlSen_IR_MaxQty        = 0,
-
-} EModAdd;
-
-typedef struct ModValues_Struct
-{
-  uint32_t Get_IR_Sensor_1_CurrTemp;
-  uint32_t Get_IR_Sensor_2_CurrTemp;
-  uint32_t Get_IR_Curr_OnTime;
-  uint32_t Get_IR_Curr_OffTime;
-  uint32_t Get_IR_Ref_Temp;
-
-  uint32_t Get_HR_Set_Temp;
-  uint32_t Get_HR_Hys_Temp;
-  uint32_t Get_HR_Alarm_Hys_Temp;
-  uint32_t Get_HR_Stirrer_OnTime;
-  uint32_t Get_HR_Stirrer_OffTime;
-  uint32_t Get_HR_Comp_Alarm_Time;
-
-  uint16_t Get_HR_Alarm_Value;
-  uint16_t Get_HR_Condensor_RunSts;
-  uint16_t Get_HR_Stirrer_RunSts;
-  uint16_t Get_HR_Alarm_OnOff_Sts;
-};
 
 ModValues_Struct ModValues;
 
-
 void loop()
 {
+  WiFi_Loop();
   ModReq_Sl_Hmi();
   ModReq_Sl_LvlSen();
   Update_RegisterValues();
   delay(1000);
+
+  #ifdef THINGSPEAK_DIAGNOSTICS_ENABLED
+  loop_ThingSpeak();
+  #endif
 }
 
 
@@ -325,7 +338,82 @@ void Update_RegisterValues()
                ((Slxx_ErrState[eSl_LvlSen]   & 0x01) << 17);
   /* GRP_04 - End */
 
+  CH01_Values[3] = TS_GRP_01; /* Field 4 */
+  CH01_Values[4] = TS_GRP_02; /* Field 5 */
+  CH01_Values[5] = TS_GRP_03; /* Field 6 */
+  CH01_Values[6] = TS_GRP_04; /* Field 7 */
+  
 };
+
+/* ****************** Reset ********************************/
+
+void Perform_McuReset()
+{
+  esp_restart();
+}
+
+
+/* ****************** WiFi ********************************/
+
+void WiFi_Init()
+{
+  WiFiMulti.addAP(SSID_1, PASSWORD_1);
+  WiFiMulti.addAP(SSID_2, PASSWORD_2);
+  WiFiMulti.addAP(SSID_3, PASSWORD_3);
+
+  DEBUG_PRINTLN("Connecting to WiFi...");
+  WiFi_Loop();
+}
+
+void WiFi_Loop()
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    DEBUG_PRINT("Attempting to connect to WiFi...");
+
+    Wifi_TryCount = 0;
+
+    delay(2000);
+
+    while (WiFiMulti.run() != WL_CONNECTED && Wifi_TryCount < WL_RETRY_MAX)
+    {
+      DEBUG_PRINT(".");
+
+      delay(5000);
+
+      Wifi_TryCount++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      DEBUG_PRINT("Connected to SSID: " + String(WiFi.SSID()));
+      DEBUG_PRINTLN("RSSI: " + String(WiFi.RSSI()));
+      DEBUG_PRINTLN("IP address: " + String(WiFi.localIP()));
+
+      Wifi_TryCount = 0;
+    }
+    else
+    {
+      DEBUG_PRINTLN("\nFailed to Connect, Resetting MCU...");
+      Perform_McuReset();
+    }
+  }
+}
+
+
+#ifdef THINGSPEAK_DIAGNOSTICS_ENABLED
+
+void loop_ThingSpeak()
+{
+  Std_RetType Ret = E_NOT_OK;
+
+  if (millis() - ThingSpeak_lastSendTime >= THINGSPEAK_UPDATE_INTERVAL_MS)
+  {
+    Ret = ThingSpeak_Update_CH01();
+    ThingSpeak_lastSendTime = millis();
+  }
+  /* ThingSpeak_lastSendTime will be updated in the Func ThingSpeak_Update */
+}
 
 float GetUptime()
 {
@@ -337,13 +425,6 @@ float GetUptime()
   return minutes + decimalSeconds;
 }
 
-/*
-Field 1 - UpTime
-Field 2 - Tank Level Avg
-Field 3 - Tank Level Raw
-Field 4 - GRP_01
-Field 5 - GRP_02
-Field 6 - GRP_03
-Field 7 - GRP_04
-Field 8 - GRP_05
-*/
+#endif
+
+
