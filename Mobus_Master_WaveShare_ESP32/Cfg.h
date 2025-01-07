@@ -89,7 +89,7 @@ byte SlaveIDs[TOTAL_SLAVES] = {eSl_Id_BCast, eSl_Id_Hmi, eSl_Id_LvlSen};
 #define SECRET_CH_ID_CH04         2801615
 #define SECRET_WRITE_APIKEY_CH04  "ZN05N5700ZOKYSG7"
 
-#define THINGSPEAK_UPDATE_INTERVAL_MS       60000
+#define THINGSPEAK_UPDATE_INTERVAL_MS       10000
 #define THINGSPEAK_UPDATE_MAX_CH            1
 
 #endif

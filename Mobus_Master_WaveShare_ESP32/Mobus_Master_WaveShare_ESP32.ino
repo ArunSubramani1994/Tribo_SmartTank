@@ -34,6 +34,7 @@ uint32_t TS_GRP_01 = 0;
 uint32_t TS_GRP_02 = 0;
 uint32_t TS_GRP_03 = 0;
 uint32_t TS_GRP_04 = 0;
+uint32_t TS_GRP_05 = 0;
 
 
 /* ****************** ThingSpeak Diagnostics - Begin ********************************/
@@ -266,9 +267,9 @@ void Update_RegisterValues()
   ModValues.Get_HR_Stirrer_OffTime   = HoldReg_Slxx[eSl_Hmi][8];
   ModValues.Get_HR_Comp_Alarm_Time   = HoldReg_Slxx[eSl_Hmi][10];
   ModValues.Get_HR_Alarm_Value       = HoldReg_Slxx[eSl_Hmi][14];
-  ModValues.Get_HR_Condensor_RunSts  = HoldReg_Slxx[eSl_Hmi][21];
-  ModValues.Get_HR_Stirrer_RunSts    = HoldReg_Slxx[eSl_Hmi][22];
-  ModValues.Get_HR_Alarm_OnOff_Sts   = HoldReg_Slxx[eSl_Hmi][23];
+  ModValues.Get_HR_Condensor_RunSts  = HoldReg_Slxx[eSl_Hmi][20];
+  ModValues.Get_HR_Stirrer_RunSts    = HoldReg_Slxx[eSl_Hmi][21];
+  ModValues.Get_HR_Alarm_OnOff_Sts   = HoldReg_Slxx[eSl_Hmi][22];
 
   ModValues.Get_IR_Sensor_1_CurrTemp = InReg_Slxx[eSl_Hmi][0];
   ModValues.Get_IR_Sensor_2_CurrTemp = InReg_Slxx[eSl_Hmi][2];
@@ -278,53 +279,75 @@ void Update_RegisterValues()
 
   DEBUG_PRINTLN(("Slxx_ErrCount[eSl_Hmi]: ") + String(Slxx_ErrCount[eSl_Hmi]));
 
+  /*
+  * Precision Loss in Floating-Point Conversion:
+  * 
+  * Floating-point numbers (float) in most systems are represented using 32 bits (IEEE 754 standard).
+  * A uint32_t can represent all values in the range [0, 4,294,967,295], but a float can only represent integers exactly up to about 
+  * 2
+  * 24
+  * 2 
+  * 24
+  *   (16,777,216). Beyond that, it can only approximate the value due to limited precision.
+  */
+
   /* GRP_01 - Begin */
 
   DEBUG_PRINTLN(("Get_HR_Set_Temp          = ")+String(ModValues.Get_HR_Set_Temp         ));
   DEBUG_PRINTLN(("Get_HR_Hys_Temp          = ")+String(ModValues.Get_HR_Hys_Temp         ));
   DEBUG_PRINTLN(("Get_HR_Alarm_Hys_Temp    = ")+String(ModValues.Get_HR_Alarm_Hys_Temp   ));
-  DEBUG_PRINTLN(("Get_HR_Stirrer_OnTime    = ")+String(ModValues.Get_HR_Stirrer_OnTime   ));
 
   TS_GRP_01 =  ((ModValues.Get_HR_Set_Temp         & 0xFF) << 0 ) |
                ((ModValues.Get_HR_Hys_Temp         & 0xFF) << 8 ) |
-               ((ModValues.Get_HR_Alarm_Hys_Temp   & 0xFF) << 16) |
-               ((ModValues.Get_HR_Stirrer_OnTime   & 0xFF) << 24);
+               ((ModValues.Get_HR_Alarm_Hys_Temp   & 0xFF) << 16);
+               
   /* GRP_01 - End */
 
   /* GRP_02 - Begin */
 
+  DEBUG_PRINTLN(("Get_HR_Stirrer_OnTime    = ")+String(ModValues.Get_HR_Stirrer_OnTime   ));
   DEBUG_PRINTLN(("Get_HR_Stirrer_OffTime   = ")+String(ModValues.Get_HR_Stirrer_OffTime  ));
   DEBUG_PRINTLN(("Get_HR_Comp_Alarm_Time   = ")+String(ModValues.Get_HR_Comp_Alarm_Time  ));
+
+  TS_GRP_02 =  ((ModValues.Get_HR_Stirrer_OnTime   & 0xFF) << 0 )  |
+               ((ModValues.Get_HR_Stirrer_OffTime  & 0xFF) << 8 )  |
+               ((ModValues.Get_HR_Comp_Alarm_Time  & 0xFF) << 16);
+
+  /* GRP_02 - End */
+
+  /* GRP_03 - Begin */
+
   DEBUG_PRINTLN(("Get_IR_Ref_Temp          = ")+String(ModValues.Get_IR_Ref_Temp         ));
   DEBUG_PRINTLN(("Get_HR_Alarm_Value       = ")+String(ModValues.Get_HR_Alarm_Value      ));
   DEBUG_PRINTLN(("Get_HR_Condensor_RunSts  = ")+String(ModValues.Get_HR_Condensor_RunSts ));
   DEBUG_PRINTLN(("Get_HR_Stirrer_RunSts    = ")+String(ModValues.Get_HR_Stirrer_RunSts   ));
   DEBUG_PRINTLN(("Get_HR_Alarm_OnOff_Sts   = ")+String(ModValues.Get_HR_Alarm_OnOff_Sts  ));
-
-  TS_GRP_02 =  ((ModValues.Get_HR_Stirrer_OffTime  & 0xFF) << 0 )  |  // LSB (8 bits)
-               ((ModValues.Get_HR_Comp_Alarm_Time  & 0xFF) << 8 )  |  // Next 8 bits
-               ((ModValues.Get_IR_Ref_Temp         & 0xFF) << 16)  |  // Next 8 bits
-               ((ModValues.Get_HR_Alarm_Value      & 0x0F) << 24)  |  // Next 4 bits
-               ((ModValues.Get_HR_Condensor_RunSts & 0x01) << 28)  |  // 1 bit at position 28
-               ((ModValues.Get_HR_Stirrer_RunSts   & 0x01) << 29)  |  // 1 bit at position 29
-               ((ModValues.Get_HR_Alarm_OnOff_Sts  & 0x01) << 30);    // 1 bit at position 30
-  /* GRP_02 - End */
-
-
-  /* GRP_03 - Begin */
-
   DEBUG_PRINTLN(("Get_IR_Sensor_1_CurrTemp = ")+String(ModValues.Get_IR_Sensor_1_CurrTemp));
+
+               
+  TS_GRP_03 =  ((ModValues.Get_IR_Ref_Temp           & 0xFF) << 0)   |
+               ((ModValues.Get_HR_Alarm_Value        & 0x0F) << 8)   |
+               ((ModValues.Get_HR_Condensor_RunSts   & 0x01) << 12)  |
+               ((ModValues.Get_HR_Stirrer_RunSts     & 0x01) << 13)  |
+               ((ModValues.Get_HR_Alarm_OnOff_Sts    & 0x01) << 14)  |
+               ((ModValues.Get_IR_Sensor_1_CurrTemp  & 0xFF) << 16 );
+
+  /* GRP_03 - End */             
+
+
+  /* GRP_04 - Begin */
+
   DEBUG_PRINTLN(("Get_IR_Sensor_2_CurrTemp = ")+String(ModValues.Get_IR_Sensor_2_CurrTemp));
   DEBUG_PRINTLN(("Get_IR_Curr_OnTime       = ")+String(ModValues.Get_IR_Curr_OnTime      ));
   DEBUG_PRINTLN(("Get_IR_Curr_OffTime      = ")+String(ModValues.Get_IR_Curr_OffTime     ));
 
-  uint32_t TS_GRP_03 =  ((ModValues.Get_IR_Sensor_1_CurrTemp  & 0xFF) << 0 ) |
-                        ((ModValues.Get_IR_Sensor_2_CurrTemp  & 0xFF) << 8 ) |
-                        ((ModValues.Get_IR_Curr_OnTime        & 0xFF) << 16) |
-                        ((ModValues.Get_IR_Curr_OffTime       & 0xFF) << 24);
-  /* GRP_03 - End */
+  TS_GRP_04 =   ((ModValues.Get_IR_Sensor_2_CurrTemp  & 0xFF) <<  0) |
+                ((ModValues.Get_IR_Curr_OnTime        & 0xFF) <<  8) |
+                ((ModValues.Get_IR_Curr_OffTime       & 0xFF) << 16);
 
-  /* GRP_04 - Begin */
+  /* GRP_04 - End */
+
+  /* GRP_05 - Begin */
 
   DEBUG_PRINTLN(("Slxx_ErrCount[eSl_Hmi]    = ")+String(Slxx_ErrCount[eSl_Hmi]));
   DEBUG_PRINTLN(("Slxx_ErrCount[eSl_LvlSen] = ")+String(Slxx_ErrCount[eSl_LvlSen]));
@@ -332,16 +355,12 @@ void Update_RegisterValues()
   DEBUG_PRINTLN(("Slxx_ErrState[eSl_Hmi]    = ")+String(Slxx_ErrState[eSl_Hmi]));
   DEBUG_PRINTLN(("Slxx_ErrState[eSl_LvlSen] = ")+String(Slxx_ErrState[eSl_LvlSen]));
 
-  TS_GRP_04 =  ((Slxx_ErrCount[eSl_Hmi]      & 0xFF) << 0 ) |
+  TS_GRP_05 =  ((Slxx_ErrCount[eSl_Hmi]      & 0xFF) << 0 ) |
                ((Slxx_ErrCount[eSl_LvlSen]   & 0xFF) << 8 ) |
                ((Slxx_ErrState[eSl_Hmi]      & 0x01) << 16) |
                ((Slxx_ErrState[eSl_LvlSen]   & 0x01) << 17);
-  /* GRP_04 - End */
 
-  CH01_Values[3] = TS_GRP_01; /* Field 4 */
-  CH01_Values[4] = TS_GRP_02; /* Field 5 */
-  CH01_Values[5] = TS_GRP_03; /* Field 6 */
-  CH01_Values[6] = TS_GRP_04; /* Field 7 */
+  /* GRP_05 - End */
   
 };
 
@@ -409,7 +428,31 @@ void loop_ThingSpeak()
 
   if (millis() - ThingSpeak_lastSendTime >= THINGSPEAK_UPDATE_INTERVAL_MS)
   {
+    CH01_Values[0] = GetUptime();
+    CH01_Values[1] = 16777215;
+    CH01_Values[2] = 16777215;
+    CH01_Values[3] = TS_GRP_01; /* Field 4 */
+    CH01_Values[4] = TS_GRP_02; /* Field 5 */
+    CH01_Values[5] = TS_GRP_03; /* Field 6 */
+    CH01_Values[6] = TS_GRP_04; /* Field 7 */
+    CH01_Values[7] = TS_GRP_05; /* Field 8 */
+
+    DEBUG_PRINTLN("TS_CH01_F1: " +String(GetUptime()));
+    DEBUG_PRINTLN("TS_CH01_F4: " +String(TS_GRP_01));
+    DEBUG_PRINTLN("TS_CH01_F5: " +String(TS_GRP_02));
+    DEBUG_PRINTLN("TS_CH01_F6: " +String(TS_GRP_03));
+    DEBUG_PRINTLN("TS_CH01_F7: " +String(TS_GRP_04));
+    DEBUG_PRINTLN("TS_CH01_F7: " +String(TS_GRP_05));
+
+    DEBUG_PRINTLN("TS_CH01_F1: " +String(CH01_Values[0]));
+    DEBUG_PRINTLN("TS_CH01_F4: " +String(CH01_Values[3]));
+    DEBUG_PRINTLN("TS_CH01_F5: " +String(CH01_Values[4]));
+    DEBUG_PRINTLN("TS_CH01_F6: " +String(CH01_Values[5]));
+    DEBUG_PRINTLN("TS_CH01_F7: " +String(CH01_Values[6]));
+    DEBUG_PRINTLN("TS_CH01_F7: " +String(CH01_Values[7]));
+
     Ret = ThingSpeak_Update_CH01();
+
     ThingSpeak_lastSendTime = millis();
   }
   /* ThingSpeak_lastSendTime will be updated in the Func ThingSpeak_Update */
