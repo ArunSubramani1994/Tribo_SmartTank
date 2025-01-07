@@ -58,19 +58,21 @@
             color: #ccc;
         }
         table {
-            margin-top: 20px;
-            border-collapse: collapse;
-            width: 80%;
-            max-width: 600px;
-        }
-        table th, table td {
-            border: 1px solid #fff;
-            padding: 8px;
-            text-align: center;
-        }
-        table th {
-            background-color: #444;
-        }
+        margin-top: 20px;
+        border-collapse: collapse;
+        width: 80%;
+        max-width: 600px;
+        border: 2px solid black; /* Outer border color set to black */
+    }
+    table th, table td {
+        border: 1px solid #fff;
+        padding: 8px;
+        text-align: center;
+        color: black; /* Table font color set to black */
+    }
+    table th {
+        background-color: #444;
+    }
     </style>
 </head>
 <body>
@@ -102,21 +104,22 @@
         const apiUrl = "https://api.thingspeak.com/channels/2801615/feeds.json?api_key=JSI6H8QSBIGJ574S&results=1";
 
         const parameters = [
+
+            "Temperature Sensor - 1",
+            "Temperature Sensor - 2",
+            "Current On Time",
+            "Current Off Time",
+            "Condensor Running Status",
+            "Stirrer Running Status",
+            "Alarm Status",
+            "Alarm Display Value",
             "Set Temperature",
             "Hysterisis",
             "Alarm Temp Hys",
             "Stirrer On Time",
             "Stirrer Off Time",
             "Comparison Alarm Time",
-            "Reference Temperature",
-            "Alarm Display Value",
-            "Condensor Running Status",
-            "Stirrer Running Status",
-            "Alarm Status",
-            "Temperature Sensor - 1",
-            "Temperature Sensor - 2",
-            "Current On Time",
-            "Current Off Time",
+            "Reference Temperature",            
             "HMI Comm Status",
             "LvlSen Comm Status"
         ];
@@ -130,21 +133,39 @@
                 if (data.feeds && data.feeds.length > 0) {
                     const rawValue = parseFloat(data.feeds[0].field2);
                     const updateTime = data.feeds[0].created_at;
-                    updateTankLevel(rawValue, updateTime);
 
-                    const fieldValues = [
-                        parseFloat(data.feeds[0].field1),
-                        parseFloat(data.feeds[0].field2),
-                        parseFloat(data.feeds[0].field3),
-                        parseFloat(data.feeds[0].field4),
-                        parseFloat(data.feeds[0].field5),
-                        parseFloat(data.feeds[0].field6),
-                        parseFloat(data.feeds[0].field7),
-                        parseFloat(data.feeds[0].field8)
-                    ];
+                    // Check if the data is within the last 5 minutes
+                    const currentTime = new Date();
+                    const updateTimeObj = new Date(updateTime);
+                    const timeDifference = currentTime - updateTimeObj;
 
-                    // Update readings with values from the API
-                    readings = [
+                    const isUpdateTimeValid = timeDifference <= 5 * 60 * 1000; // 5 minutes in milliseconds
+
+                    if (isUpdateTimeValid) {
+                        updateTankLevel(rawValue, updateTime);
+
+                        const fieldValues = [
+                            parseFloat(data.feeds[0].field1),
+                            parseFloat(data.feeds[0].field2),
+                            parseFloat(data.feeds[0].field3),
+                            parseFloat(data.feeds[0].field4),
+                            parseFloat(data.feeds[0].field5),
+                            parseFloat(data.feeds[0].field6),
+                            parseFloat(data.feeds[0].field7),
+                            parseFloat(data.feeds[0].field8)
+                        ];
+
+                        // Update readings with values from the API
+                        readings = [
+                        (((fieldValues[5]) >> 16) & 0xFF),  // Temperature Sensor - 1
+                        (((fieldValues[6]) >>  0) & 0xFF),  // Temperature Sensor - 2
+                        (((fieldValues[6]) >>  8) & 0xFF),  // Current On Time
+                        (((fieldValues[6]) >> 16) & 0xFF),  // Current Off Time
+                        (((fieldValues[5]) >> 12) & 0x01),  // Condensor Running Status
+                        (((fieldValues[5]) >> 13) & 0x01),  // Stirrer Running Status
+                        (((fieldValues[5]) >> 14) & 0x01),  // Alarm Status
+                        (((fieldValues[5]) >>  8) & 0x0F),  // Alarm Display Value
+
                         (((fieldValues[3]) >>  0) & 0xFF), // Set Temperature
                         (((fieldValues[3]) >>  8) & 0xFF), // Hysterisis
                         (((fieldValues[3]) >> 16) & 0xFF), // Alarm Temp Hys
@@ -154,27 +175,51 @@
                         (((fieldValues[4]) >> 16) & 0xFF),  // Comparison Alarm Time
 
                         (((fieldValues[5]) >>  0) & 0xFF),  // Reference Temperature
-                        (((fieldValues[5]) >>  8) & 0x0F),  // Alarm Display Value
-                        (((fieldValues[5]) >> 12) & 0x01),  // Condensor Running Status
-                        (((fieldValues[5]) >> 13) & 0x01),  // Stirrer Running Status
-                        (((fieldValues[5]) >> 14) & 0x01),  // Alarm Status
-                        (((fieldValues[5]) >> 16) & 0xFF),  // Temperature Sensor - 1
-
-                        (((fieldValues[6]) >>  0) & 0xFF),  // Temperature Sensor - 2
-                        (((fieldValues[6]) >>  8) & 0xFF),  // Current On Time
-                        (((fieldValues[6]) >> 16) & 0xFF),  // Current Off Time
 
                         (((fieldValues[7]) >> 16) & 0x01),  // HMI Comm Status"
                         (((fieldValues[7]) >> 17) & 0x01),  // LvlSen Comm Status"
-                    ];
+                        ];
 
-                    updateReadingsTable();
+                        updateReadingsTable();
+                    } else {
+                        displayNoData();
+                    }
                 } else {
+                    displayNoData();
                     console.error("No data available");
                 }
             } catch (error) {
+                displayNoData();
                 console.error("Error fetching data:", error);
             }
+        }
+
+        function displayNoData() {
+            const tankFill = document.getElementById('tankFill');
+            const tankVolume = document.getElementById('tankVolume');
+            const tankLabel = document.getElementById('tankLabel');
+            const updateTimeLabel = document.getElementById('updateTime');
+
+            tankFill.style.height = '0%';
+            tankVolume.textContent = `-- L`;
+            tankLabel.textContent = `Tank Level: -- %`;
+            updateTimeLabel.textContent = `Last updated on: --`;
+
+            const tableBody = document.getElementById('readingsTable').querySelector('tbody');
+            tableBody.innerHTML = ""; // Clear existing rows
+
+            parameters.forEach(param => {
+                const row = document.createElement('tr');
+                const paramCell = document.createElement('td');
+                const valueCell = document.createElement('td');
+
+                paramCell.textContent = param;
+                valueCell.textContent = "--"; // Display "--" for all parameters
+
+                row.appendChild(paramCell);
+                row.appendChild(valueCell);
+                tableBody.appendChild(row);
+            });
         }
 
         function calculateTankLevel(dataValue) {
@@ -204,27 +249,30 @@
         }
 
         function updateReadingsTable() {
-        const tableBody = document.getElementById('readingsTable').querySelector('tbody');
-        tableBody.innerHTML = ""; // Clear existing rows
+            const tableBody = document.getElementById('readingsTable').querySelector('tbody');
+            tableBody.innerHTML = ""; // Clear existing rows
 
         // Check if HMI Comm Status is 1
         const hmiCommErrorIndex = parameters.indexOf("HMI Comm Status");
         const hmiCommErrorValue = readings[hmiCommErrorIndex];
 
-        parameters.forEach((param, index) => {
-            const row = document.createElement('tr');
-            const paramCell = document.createElement('td');
-            const valueCell = document.createElement('td');
+            parameters.forEach((param, index) => {
+                const row = document.createElement('tr');
+                const paramCell = document.createElement('td');
+                const valueCell = document.createElement('td');
 
             let displayValue = readings[index];
 
             // If HMI Comm Status is 1, display " - " for all parameters except itself
             if (hmiCommErrorValue === 1 && param !== "HMI Comm Status" && param !== "LvlSen Comm Status") {
                 displayValue = " - ";
+                tankFill.style.height = '0%';
+                tankVolume.textContent = `- L`;
+                tankLabel.textContent = `Tank Level: - % `;
             } else if (param === "Condensor Running Status" || param === "Stirrer Running Status" || param === "Alarm Status") {
                 displayValue = readings[index] === 0 ? "OFF" : "ON";
             } else if (param === "HMI Comm Status" || param === "LvlSen Comm Status" || param === "Alarm Status") {
-                displayValue = readings[index] === 0 ? "HEALTHY" : "ERROR";
+                displayValue = readings[index] === 0 ? "OK" : "ERROR";
             } else if (param === "Alarm Display Value") {
                 switch (readings[index]) {
                     case 0x00:
@@ -243,14 +291,14 @@
                 }
             }
 
-            paramCell.textContent = param;
+                paramCell.textContent = param;
             valueCell.textContent = displayValue; // Display processed value
 
-            row.appendChild(paramCell);
-            row.appendChild(valueCell);
-            tableBody.appendChild(row);
-        });
-}
+                row.appendChild(paramCell);
+                row.appendChild(valueCell);
+                tableBody.appendChild(row);
+            });
+        }
 
 
         // Fetch tank level and readings every 30 seconds
